@@ -1,0 +1,301 @@
+{% extends "base.html" %}
+
+{% block title %}Deepfake Detection Model Performance{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-lg-10 mx-auto">
+            <div class="card shadow-sm mb-4">
+                <div class="card-body">
+                    <h1 class="display-5 fw-bold text-primary mb-2">Model Performance Dashboard</h1>
+                    <p class="lead text-muted mb-4">Comprehensive evaluation metrics and visualizations for the Deepfake Detection model.</p>
+                    
+                    {% if metrics %}
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card h-100 border-primary">
+                                <div class="card-header bg-primary text-white">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-chart-pie me-2"></i>Key Performance Metrics
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <div class="table-responsive">
+                                        <table class="table table-hover">
+                                            <tbody>
+                                                <tr>
+                                                    <th>Accuracy</th>
+                                                    <td class="text-end">{{ "%.4f"|format(metrics.accuracy) }} <small class="text-muted">({{ "%.2f"|format(metrics.accuracy*100) }}%)</small></td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Precision</th>
+                                                    <td class="text-end">{{ "%.4f"|format(metrics.precision) }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Recall</th>
+                                                    <td class="text-end">{{ "%.4f"|format(metrics.recall) }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>F1 Score</th>
+                                                    <td class="text-end">{{ "%.4f"|format(metrics.f1_score) }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>ROC AUC</th>
+                                                    <td class="text-end">{{ "%.4f"|format(metrics.roc_auc) }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Specificity</th>
+                                                    <td class="text-end">{{ "%.4f"|format(metrics.specificity) }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="col-md-6">
+                            <div class="card h-100 border-danger">
+                                <div class="card-header bg-danger text-white">
+                                    <h5 class="mb-0">
+                                        <i class="fas fa-table me-2"></i>Confusion Matrix
+                                    </h5>
+                                </div>
+                                <div class="card-body">
+                                    <h6 class="text-center mb-3">Prediction Results</h6>
+                                    <div class="table-responsive">
+                                        <table class="table table-bordered text-center">
+                                            <thead>
+                                                <tr>
+                                                    <th></th>
+                                                    <th>Predicted Original</th>
+                                                    <th>Predicted Deepfake</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr>
+                                                    <th>Actual Original</th>
+                                                    <td class="table-success">{{ metrics.confusion_matrix[0][0] }}</td>
+                                                    <td class="table-danger">{{ metrics.confusion_matrix[0][1] }}</td>
+                                                </tr>
+                                                <tr>
+                                                    <th>Actual Deepfake</th>
+                                                    <td class="table-danger">{{ metrics.confusion_matrix[1][0] }}</td>
+                                                    <td class="table-success">{{ metrics.confusion_matrix[1][1] }}</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    <div class="small text-muted mt-2">
+                                        <ul class="mb-0">
+                                            <li>True Positives: {{ metrics.tp }}</li>
+                                            <li>False Positives: {{ metrics.fp }}</li>
+                                            <li>True Negatives: {{ metrics.tn }}</li>
+                                            <li>False Negatives: {{ metrics.fn }}</li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-warning">
+                        <h5><i class="fas fa-exclamation-triangle me-2"></i>Metrics Not Available</h5>
+                        <p class="mb-0">Performance metrics haven't been generated yet. Please run the evaluation script first.</p>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Visualization Tabs -->
+                    {% if available_plots %}
+                    <div class="mb-4">
+                        <h3 class="mb-3"><i class="fas fa-chart-line me-2"></i>Performance Visualizations</h3>
+                        
+                        <ul class="nav nav-tabs" id="vizTabs" role="tablist">
+                            {% for category in categorized_plots %}
+                            <li class="nav-item" role="presentation">
+                                <button class="nav-link {% if loop.first %}active{% endif %}" 
+                                        id="tab-{{ category|lower|replace(' ', '-') }}" 
+                                        data-bs-toggle="tab" 
+                                        data-bs-target="#viz-{{ category|lower|replace(' ', '-') }}" 
+                                        type="button" 
+                                        role="tab" 
+                                        aria-controls="viz-{{ category|lower|replace(' ', '-') }}" 
+                                        aria-selected="{% if loop.first %}true{% else %}false{% endif %}">
+                                    {{ category }}
+                                </button>
+                            </li>
+                            {% endfor %}
+                        </ul>
+                        
+                        <div class="tab-content pt-4" id="vizTabContent">
+                            {% for category, plots in categorized_plots.items() %}
+                            <div class="tab-pane fade {% if loop.first %}show active{% endif %}" 
+                                 id="viz-{{ category|lower|replace(' ', '-') }}" 
+                                 role="tabpanel" 
+                                 aria-labelledby="tab-{{ category|lower|replace(' ', '-') }}">
+                                
+                                <div class="row">
+                                    {% for plot in plots %}
+                                    <div class="col-md-6 mb-4">
+                                        <div class="card h-100">
+                                            <div class="card-header">
+                                                <h5 class="mb-0">{{ plot.name }}</h5>
+                                            </div>
+                                            <div class="card-body text-center p-2">
+                                                <a href="{{ plot.path }}" target="_blank" class="d-block">
+                                                    <img src="{{ plot.path }}" class="img-fluid" alt="{{ plot.name }}">
+                                                </a>
+                                            </div>
+                                            <div class="card-footer">
+                                                <a href="{{ plot.path }}" class="btn btn-sm btn-outline-primary" target="_blank">
+                                                    <i class="fas fa-external-link-alt me-1"></i> View Full Size
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Class-specific Metrics -->
+                    {% if metrics and metrics.classification_report %}
+                    <div class="card mb-4">
+                        <div class="card-header bg-dark text-white">
+                            <h5 class="mb-0">
+                                <i class="fas fa-tasks me-2"></i>Class-specific Metrics
+                            </h5>
+                        </div>
+                        <!-- <div class="card-body">
+                            <div class="table-responsive">
+                                <table class="table table-striped">
+                                    <thead>
+                                        <tr>
+                                            <th>Class</th>
+                                            <th>Precision</th>
+                                            <th>Recall</th>
+                                            <th>F1-Score</th>
+                                            <th>Support</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        {% set class_report = metrics.classification_report %}
+                                        {% set class_keys = class_report.keys()|list %}
+                                        
+                                        {# Find the possible class keys by checking for typical values #}
+                                        {% set original_key = none %}
+                                        {% set deepfake_key = none %}
+                                        {% set macro_key = none %}
+                                        {% set weighted_key = none %}
+                                        
+                                        {% for key in class_keys %}
+                                            {% if key == '0' or key == 0 %}
+                                                {% set original_key = key %}
+                                            {% elif key == '1' or key == 1 %}
+                                                {% set deepfake_key = key %}
+                                            {% elif 'macro' in key|string %}
+                                                {% set macro_key = key %}
+                                            {% elif 'weight' in key|string %}
+                                                {% set weighted_key = key %}
+                                            {% endif %}
+                                        {% endfor %}
+                                        
+                                        {% if original_key is not none and deepfake_key is not none %}
+                                            <tr>
+                                                <th>Original</th>
+                                                <td>{{ "%.4f"|format(class_report[original_key].precision) }}</td>
+                                                <td>{{ "%.4f"|format(class_report[original_key].recall) }}</td>
+                                                <td>{{ "%.4f"|format(class_report[original_key]['f1-score']) }}</td>
+                                                <td>{{ class_report[original_key].support }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Deepfake</th>
+                                                <td>{{ "%.4f"|format(class_report[deepfake_key].precision) }}</td>
+                                                <td>{{ "%.4f"|format(class_report[deepfake_key].recall) }}</td>
+                                                <td>{{ "%.4f"|format(class_report[deepfake_key]['f1-score']) }}</td>
+                                                <td>{{ class_report[deepfake_key].support }}</td>
+                                            </tr>
+                                        {% else %}
+                                            <tr>
+                                               
+                                            </tr>
+                                        {% endif %}
+                                    </tbody>
+                                </table>
+                            </div> -->
+                            
+                            {% if macro_key is not none and weighted_key is not none %}
+                            <div class="mt-3">
+                                <h6>Summary Metrics</h6>
+                                <div class="table-responsive">
+                                    <table class="table table-sm">
+                                        <thead>
+                                            <tr>
+                                                <th>Average Type</th>
+                                                <th>Precision</th>
+                                                <th>Recall</th>
+                                                <th>F1-Score</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr>
+                                                <th>Macro Avg</th>
+                                                <td>{{ "%.4f"|format(class_report[macro_key].precision) }}</td>
+                                                <td>{{ "%.4f"|format(class_report[macro_key].recall) }}</td>
+                                                <td>{{ "%.4f"|format(class_report[macro_key]['f1-score']) }}</td>
+                                            </tr>
+                                            <tr>
+                                                <th>Weighted Avg</th>
+                                                <td>{{ "%.4f"|format(class_report[weighted_key].precision) }}</td>
+                                                <td>{{ "%.4f"|format(class_report[weighted_key].recall) }}</td>
+                                                <td>{{ "%.4f"|format(class_report[weighted_key]['f1-score']) }}</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Detailed Report Section (collapsible) -->
+                    {% if has_report %}
+                    <div class="card mb-4">
+                        <div class="card-header bg-secondary text-white">
+                            <a class="d-flex justify-content-between text-white text-decoration-none" 
+                               data-bs-toggle="collapse" 
+                               href="#reportCollapse" 
+                               role="button" 
+                               aria-expanded="false" 
+                               aria-controls="reportCollapse">
+                                <h5 class="mb-0"><i class="fas fa-file-alt me-2"></i>Detailed Evaluation Report</h5>
+                                <span><i class="fas fa-chevron-down"></i></span>
+                            </a>
+                        </div>
+                        <div class="collapse" id="reportCollapse">
+                            <div class="card-body">
+                                <pre class="bg-light p-3 rounded">{{ report_content }}</pre>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                    
+                    <div class="d-flex justify-content-between mt-4">
+                        <a href="{{ url_for('about') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-arrow-left me-2"></i>Back to About
+                        </a>
+                        <a href="{{ url_for('index') }}" class="btn btn-primary">
+                            <i class="fas fa-home me-2"></i>Home
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

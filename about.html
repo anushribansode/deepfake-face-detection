@@ -1,0 +1,173 @@
+{% extends "base.html" %}
+
+{% block title %}About the Deepfake Detector{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8 mx-auto">
+        <div class="card shadow-sm mb-4">
+            <div class="card-body p-4">
+                <h1 class="display-5 fw-bold text-primary mb-4">About the Deepfake Detector</h1>
+                
+                <div class="mb-4">
+                    <h4 class="mb-3">What are Deepfakes?</h4>
+                    <p>
+                        Deepfakes are synthetic media in which a person's likeness is replaced with someone else's using artificial intelligence. 
+                        The term is a combination of "deep learning" and "fake", referring to the use of deep learning techniques to create convincing fake content.
+                    </p>
+                    <p>
+                        This technology has rapidly advanced in recent years, making it increasingly difficult to distinguish between real and manipulated content.
+                        While there are legitimate uses for synthetic media in entertainment and education, the potential for misuse in creating false information,
+                        impersonation, and fraud has raised significant ethical concerns.
+                    </p>
+                </div>
+                
+                <div class="mb-4">
+                    <h4 class="mb-3">How our Detector Works</h4>
+                    <p>
+                        Our deepfake detection system utilizes a state-of-the-art deep learning model based on ResNet50 architecture, trained on thousands of authentic and manipulated images.
+                        The model analyzes visual patterns and inconsistencies that are often imperceptible to the human eye, looking for telltale signs of manipulation.
+                    </p>
+                    
+                    <div class="row mt-4">
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100 bg-light">
+                                <div class="card-body text-center p-3">
+                                    <i class="fas fa-image fa-2x text-primary mb-3"></i>
+                                    <h5>Input Analysis</h5>
+                                    <p class="small text-muted mb-0">Processes images or video frames through multiple layers of neural networks</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100 bg-light">
+                                <div class="card-body text-center p-3">
+                                    <i class="fas fa-brain fa-2x text-primary mb-3"></i>
+                                    <h5>Feature Extraction</h5>
+                                    <p class="small text-muted mb-0">Identifies inconsistencies in facial features, lighting, and image artifacts</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <div class="card h-100 bg-light">
+                                <div class="card-body text-center p-3">
+                                    <i class="fas fa-check-double fa-2x text-primary mb-3"></i>
+                                    <h5>Classification</h5>
+                                    <p class="small text-muted mb-0">Determines probability of manipulation based on learned patterns</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-4">
+                    <h4 class="mb-3">Training Methodology</h4>
+                    <p>
+                        Our model was trained in two phases:
+                    </p>
+                    <ol>
+                        <li>
+                            <strong>Phase 1:</strong> Feature learning from a large dataset of over 18,000 frames from nearly 1,000 videos,
+                            focusing on fundamental visual inconsistencies.
+                        </li>
+                        <li>
+                            <strong>Phase 2:</strong> Fine-tuning with more nuanced and challenging examples to improve accuracy
+                            and reduce false positives/negatives.
+                        </li>
+                    </ol>
+                    <p>
+                        The training process took approximately 10 hours and utilized cross-validation techniques to ensure generalization
+                        across a wide variety of content types.
+                    </p>
+                    
+                    {% if has_metrics %}
+                    <div class="alert alert-primary mt-3">
+                        <div class="d-flex align-items-center">
+                            <div class="me-3">
+                                <i class="fas fa-chart-line fa-2x"></i>
+                            </div>
+                            <div>
+                                <h5 class="mb-1">Model Performance Metrics Available</h5>
+                                <p class="mb-2">View detailed performance metrics, confusion matrices, ROC curves, and more.</p>
+                                <a href="{{ url_for('performance') }}" class="btn btn-sm btn-primary">
+                                    <i class="fas fa-chart-bar me-1"></i> View Performance Dashboard
+                                </a>
+                            </div>
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <div class="mb-4">
+                    <h4 class="mb-3">Limitations and Considerations</h4>
+                    <p>
+                        While our detector achieves high accuracy in controlled testing environments, it's important to understand its limitations:
+                    </p>
+                    <ul>
+                        <li>Deepfake technology is rapidly evolving, and detection methods must continually adapt.</li>
+                        <li>Detection can be more challenging with highly sophisticated deepfakes created with cutting-edge techniques.</li>
+                        <li>Low-resolution media, compression artifacts, and poor lighting conditions can affect detection accuracy.</li>
+                        <li>Detection should be considered as one tool in a broader verification process, not as a definitive determination.</li>
+                    </ul>
+                </div>
+                
+                <div class="alert alert-info">
+                    <h5><i class="fas fa-lightbulb me-2"></i>Best Practices</h5>
+                    <ul class="mb-0">
+                        <li>Cross-reference suspicious content through multiple verification methods.</li>
+                        <li>Adjust the detection threshold based on your specific needs for sensitivity versus specificity.</li>
+                        <li>For videos, examine temporal consistency across frames rather than relying on a single frame analysis.</li>
+                        <li>Consider the context and source of media when interpreting detection results.</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card shadow-sm">
+            <div class="card-body p-4">
+                <h4 class="mb-3">Usage Instructions</h4>
+                <div class="row">
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5><i class="fas fa-upload text-primary me-2"></i>Upload Media</h5>
+                                <p class="small text-muted">Drag and drop or browse to upload an image or video file for analysis. Supported formats include JPG, PNG, GIF, MP4, AVI, and MOV files.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5><i class="fas fa-camera text-primary me-2"></i>Webcam Detection</h5>
+                                <p class="small text-muted">Use your webcam for real-time deepfake detection. Simply click the start webcam button and capture frames to analyze.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5><i class="fas fa-sliders-h text-primary me-2"></i>Adjust Threshold</h5>
+                                <p class="small text-muted">Fine-tune the detection sensitivity by adjusting the threshold slider. Lower values increase sensitivity but may lead to more false positives.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6 mb-3">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5><i class="fas fa-history text-primary me-2"></i>View History</h5>
+                                <p class="small text-muted">Access your recent detection results in the history tab. This allows you to compare analyses and track suspicious media.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="d-grid gap-2 mt-4">
+                    <a href="{{ url_for('index') }}" class="btn btn-primary">
+                        <i class="fas fa-home me-2"></i>Return to Home Page
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

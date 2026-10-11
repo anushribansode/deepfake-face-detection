@@ -1,0 +1,692 @@
+{% extends "base.html" %}
+
+{% block title %}Deepfake Detector - Home{% endblock %}
+
+{% block head %}
+<style>
+    .detection-card {
+        transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    .detection-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+    }
+    .webcam-container {
+        position: relative;
+        width: 100%;
+        border-radius: 8px;
+        overflow: hidden;
+    }
+    .webcam-video {
+        width: 100%;
+        border-radius: 8px;
+        background-color: #000;
+    }
+    .webcam-overlay {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        background-color: rgba(0,0,0,0.7);
+        color: white;
+    }
+    .canvas-container {
+        display: none;
+    }
+    .upload-area {
+        border: 2px dashed #ccc;
+        border-radius: 8px;
+        padding: 2rem;
+        text-align: center;
+        margin-bottom: 1rem;
+        transition: border-color 0.3s;
+    }
+    .upload-area:hover, .upload-area.dragover {
+        border-color: #0d6efd;
+    }
+    .spinner-border {
+        width: 3rem;
+        height: 3rem;
+    }
+    .nav-tabs .nav-link {
+        border: none;
+        padding: 1rem 1.5rem;
+        font-weight: 500;
+    }
+    .nav-tabs .nav-link.active {
+        border-bottom: 3px solid #0d6efd;
+        background-color: transparent;
+    }
+    .threshold-container {
+        padding: 10px;
+        background-color: #f8f9fa;
+        border-radius: 8px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Header -->
+        <div class="bg-white p-4 rounded-3 shadow-sm mb-4">
+            <h1 class="display-5 fw-bold text-primary">
+                <i class="fas fa-shield-alt me-2"></i>Deepfake Face Detection
+            </h1>
+            <p class="lead">Upload an image/video or use your webcam to detect deepfakes with our AI-powered system</p>
+            <div class="d-flex align-items-center">
+                <div class="badge {% if gpu_available %}bg-success{% else %}bg-warning{% endif %} text-white me-2">
+                    {{ device }}
+                </div>
+                <small class="text-muted">Model loaded and ready for detection</small>
+            </div>
+        </div>
+
+        <!-- Tab navigation -->
+        <ul class="nav nav-tabs mb-4" id="detectionTabs" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="upload-tab" data-bs-toggle="tab" data-bs-target="#upload-tab-pane" type="button" role="tab">
+                    <i class="fas fa-upload me-2"></i>Upload Media
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="webcam-tab" data-bs-toggle="tab" data-bs-target="#webcam-tab-pane" type="button" role="tab">
+                    <i class="fas fa-camera me-2"></i>Webcam
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="history-tab" data-bs-toggle="tab" data-bs-target="#history-tab-pane" type="button" role="tab">
+                    <i class="fas fa-history me-2"></i>History
+                </button>
+            </li>
+        </ul>
+
+        <!-- Tab content -->
+        <div class="tab-content" id="detectionTabsContent">
+            <!-- Upload Tab -->
+            <div class="tab-pane fade show active" id="upload-tab-pane" role="tabpanel" aria-labelledby="upload-tab" tabindex="0">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">Upload Image or Video</h5>
+                        
+                        <form action="{{ url_for('detect') }}" method="POST" enctype="multipart/form-data" id="upload-form">
+                            <!-- Upload Area -->
+                            <div class="upload-area" id="upload-area">
+                                <i class="fas fa-cloud-upload-alt fa-3x text-muted mb-3"></i>
+                                <h4>Drag & Drop Files Here</h4>
+                                <p class="mb-4">or click to browse files</p>
+                                <input type="file" id="file-input" name="file" class="d-none" accept=".jpg,.jpeg,.png,.gif,.mp4,.avi,.mov,.mkv">
+                                <button type="button" class="btn btn-primary" id="browse-button">
+                                    <i class="fas fa-folder-open me-2"></i>Browse Files
+                                </button>
+                            </div>
+                            
+                            <!-- File Preview (Initially Hidden) -->
+                            <div id="file-preview" class="text-center mb-3" style="display: none;">
+                                <img id="image-preview" class="img-fluid rounded-3 mb-2" style="max-height: 300px; display: none;">
+                                <div id="video-preview-container" class="mb-2" style="display: none;">
+                                    <video id="video-preview" class="img-fluid rounded-3" controls style="max-height: 300px;"></video>
+                                </div>
+                                <div class="d-flex justify-content-center align-items-center">
+                                    <span id="file-name" class="me-2"></span>
+                                    <button type="button" class="btn btn-sm btn-outline-danger" id="remove-file">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                            
+                            <!-- Threshold Slider -->
+                            <div class="threshold-container mb-3">
+                                <label for="threshold-slider" class="form-label d-flex justify-content-between">
+                                    <span>Detection Threshold:</span>
+                                    <span id="threshold-value">0.5</span>
+                                </label>
+                                <input type="range" class="form-range" id="threshold-slider" name="threshold" min="0" max="1" step="0.05" value="{{ threshold }}">
+                                <div class="d-flex justify-content-between small text-muted">
+                                    <span>Less Strict</span>
+                                    <span>More Strict</span>
+                                </div>
+                            </div>
+                            
+                            <!-- Submit Button -->
+                            <div class="d-grid gap-2">
+                                <button type="submit" class="btn btn-primary" id="analyze-button" disabled>
+                                    <i class="fas fa-search me-2"></i>Analyze Media
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Webcam Tab -->
+            <div class="tab-pane fade" id="webcam-tab-pane" role="tabpanel" aria-labelledby="webcam-tab" tabindex="0">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">Live Webcam Detection</h5>
+                        
+                        <!-- Webcam Container -->
+                        <div class="webcam-container mb-3">
+                            <video id="webcam" class="webcam-video" autoplay playsinline></video>
+                            <div class="webcam-overlay" id="webcam-overlay">
+                                <i class="fas fa-camera fa-3x mb-3"></i>
+                                <p>Click the button below to start your webcam</p>
+                            </div>
+                        </div>
+                        
+                        <!-- Webcam Controls -->
+                        <div class="d-flex justify-content-between mb-3">
+                            <button class="btn btn-primary" id="start-webcam">
+                                <i class="fas fa-play me-2"></i>Start Webcam
+                            </button>
+                            <button class="btn btn-success" id="capture-image" disabled>
+                                <i class="fas fa-camera me-2"></i>Capture Frame
+                            </button>
+                        </div>
+                        
+                        <!-- Threshold Slider for Webcam -->
+                        <div class="threshold-container mb-3">
+                            <label for="webcam-threshold-slider" class="form-label d-flex justify-content-between">
+                                <span>Detection Threshold:</span>
+                                <span id="webcam-threshold-value">0.5</span>
+                            </label>
+                            <input type="range" class="form-range" id="webcam-threshold-slider" min="0" max="1" step="0.05" value="{{ threshold }}">
+                            <div class="d-flex justify-content-between small text-muted">
+                                <span>Less Strict</span>
+                                <span>More Strict</span>
+                            </div>
+                        </div>
+                        
+                        <!-- Live Result Display -->
+                        <div id="webcam-result" class="alert alert-info text-center" style="display: none;">
+                            <div id="webcam-result-label" class="h4 mb-2"></div>
+                            <div id="webcam-confidence" class="mb-0"></div>
+                        </div>
+                        
+                        <!-- Canvas for Processing -->
+                        <div class="canvas-container">
+                            <canvas id="canvas"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- History Tab -->
+            <div class="tab-pane fade" id="history-tab-pane" role="tabpanel" aria-labelledby="history-tab" tabindex="0">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h5 class="card-title mb-3">Detection History</h5>
+                        
+                        {% if history %}
+                            <div class="row row-cols-1 row-cols-md-2 g-4">
+                                {% for item in history %}
+                                    <div class="col">
+                                        <div class="card h-100 detection-card">
+                                            <div class="card-body">
+                                                <h6 class="card-title">
+                                                    {% if item.file_type == "image" %}
+                                                        <i class="fas fa-image me-2"></i>
+                                                    {% elif item.file_type == "video" %}
+                                                        <i class="fas fa-video me-2"></i>
+                                                    {% elif item.file_type == "webcam" %}
+                                                        <i class="fas fa-camera me-2"></i>
+                                                    {% endif %}
+                                                    {{ item.filename }}
+                                                </h6>
+                                                <p class="card-text">
+                                                    <small class="text-muted">{{ item.timestamp }}</small>
+                                                </p>
+                                                <div class="badge {% if item.result.is_deepfake %}bg-danger{% else %}bg-success{% endif %} mb-2">
+                                                    {{ item.result.label }}
+                                                </div>
+                                                <p class="small mb-0">
+                                                    {% if item.file_type == "video" %}
+                                                        Deepfake frames: {{ "%.1f"|format(item.result.deepfake_percentage) }}%
+                                                    {% else %}
+                                                        Confidence: {{ "%.2f"|format(item.result.probability) }}
+                                                    {% endif %}
+                                                </p>
+                                            </div>
+                                            <div class="card-footer bg-transparent">
+                                                <a href="{{ url_for('view_history_item', history_id=item.id) }}" class="btn btn-sm btn-outline-primary stretched-link">
+                                                    <i class="fas fa-search me-1"></i>View Details
+                                                </a>
+                                            </div>
+                                        </div>
+                                    </div>
+                                {% endfor %}
+                            </div>
+                        {% else %}
+                            <div class="text-center py-5">
+                                <i class="fas fa-history fa-3x text-muted mb-3"></i>
+                                <h5 class="text-muted">No detection history yet</h5>
+                                <p class="text-muted">Your detection results will appear here</p>
+                            </div>
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <!-- Info Card -->
+        <div class="card shadow-sm mb-4">
+            <div class="card-body">
+                <h5 class="card-title">How It Works</h5>
+                <p>Our deepfake detector uses a state-of-the-art deep learning model trained on thousands of real and manipulated images.</p>
+                <ul class="list-group list-group-flush mb-3">
+                    <li class="list-group-item"><i class="fas fa-upload text-primary me-2"></i> Upload any image or video</li>
+                    <li class="list-group-item"><i class="fas fa-camera text-primary me-2"></i> Or use your webcam for live detection</li>
+                    <li class="list-group-item"><i class="fas fa-sliders-h text-primary me-2"></i> Adjust the threshold to fine-tune detection</li>
+                    <li class="list-group-item"><i class="fas fa-chart-bar text-primary me-2"></i> Get detailed analysis results</li>
+                </ul>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('about') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-info-circle me-2"></i>Learn More
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Training Stats Card -->
+        {% if training_stats %}
+        <div class="card shadow-sm mb-4">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-chart-line me-2"></i>Model Training Stats
+            </div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <h6 class="card-subtitle mb-2 text-muted">Dataset</h6>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Total Videos:</span>
+                        <span class="fw-bold">{{ training_stats.dataset_stats.total_videos }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Total Frames:</span>
+                        <span class="fw-bold">{{ training_stats.dataset_stats.total_frames }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Training/Validation Split:</span>
+                        <span class="fw-bold">{{ training_stats.dataset_stats.training_frames }}/{{ training_stats.dataset_stats.validation_frames }}</span>
+                    </div>
+                </div>
+                
+                <div class="mb-3">
+                    <h6 class="card-subtitle mb-2 text-muted">Training Duration</h6>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Phase 1:</span>
+                        <span class="fw-bold">{{ (training_stats.training_time.phase1_seconds / 3600)|round(1) }} hours</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Phase 2:</span>
+                        <span class="fw-bold">{{ (training_stats.training_time.phase2_seconds / 3600)|round(1) }} hours</span>
+                    </div>
+                </div>
+                
+                <div class="mb-0">
+                    <h6 class="card-subtitle mb-2 text-muted">Hyperparameters</h6>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Batch Size:</span>
+                        <span class="fw-bold">{{ training_stats.hyperparameters.batch_size }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Learning Rate:</span>
+                        <span class="fw-bold">{{ training_stats.hyperparameters.learning_rate }}</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Total Epochs:</span>
+                        <span class="fw-bold">{{ training_stats.hyperparameters.epochs_phase1 + training_stats.hyperparameters.epochs_phase2 }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Processing Modal -->
+<div class="modal fade" id="processingModal" tabindex="-1" data-bs-backdrop="static" data-bs-keyboard="false">
+    <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-content">
+            <div class="modal-body text-center py-4">
+                <div class="spinner-border text-primary mb-3" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <h5 class="mb-1">Processing</h5>
+                <p class="mb-0 text-muted">Analyzing for manipulated content...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Model Performance Section -->
+{% if has_metrics %}
+<section class="mt-5 py-4 bg-light rounded">
+    <div class="container">
+        <div class="row">
+            <div class="col-lg-10 mx-auto">
+                <div class="card shadow-sm">
+                    <div class="card-body p-4">
+                        <div class="row align-items-center">
+                            <div class="col-md-7">
+                                <h2 class="mb-3 text-primary">Model Performance Metrics</h2>
+                                <p class="lead">
+                                    Our deepfake detection model has been thoroughly evaluated and achieves:
+                                </p>
+                                
+                                <div class="row mb-3">
+                                    <div class="col-6 col-md-3 mb-3 text-center">
+                                        <div class="border border-success rounded p-2 bg-white">
+                                            <h3 class="text-success mb-1">{{ "%.1f"|format(metrics.accuracy*100) }}%</h3>
+                                            <p class="small text-muted mb-0">Accuracy</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-3 mb-3 text-center">
+                                        <div class="border border-danger rounded p-2 bg-white">
+                                            <h3 class="text-danger mb-1">{{ "%.1f"|format(metrics.precision*100) }}%</h3>
+                                            <p class="small text-muted mb-0">Precision</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-3 mb-3 text-center">
+                                        <div class="border border-info rounded p-2 bg-white">
+                                            <h3 class="text-info mb-1">{{ "%.1f"|format(metrics.recall*100) }}%</h3>
+                                            <p class="small text-muted mb-0">Recall</p>
+                                        </div>
+                                    </div>
+                                    <div class="col-6 col-md-3 mb-3 text-center">
+                                        <div class="border border-primary rounded p-2 bg-white">
+                                            <h3 class="text-primary mb-1">{{ "%.1f"|format(metrics.roc_auc*100) }}%</h3>
+                                            <p class="small text-muted mb-0">ROC AUC</p>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <p>
+                                    These metrics demonstrate the high reliability of our detection system on the test dataset. View our complete performance
+                                    analysis to learn more about how our model performs.
+                                </p>
+                                
+                                <a href="{{ url_for('performance') }}" class="btn btn-primary">
+                                    <i class="fas fa-chart-bar me-2"></i>View Performance Details
+                                </a>
+                            </div>
+                            <div class="col-md-5 mt-4 mt-md-0">
+                                <div class="text-center">
+                                    <img src="{{ url_for('static', filename='metrics/plots/confusion_matrix.png') }}" 
+                                         class="img-fluid rounded shadow-sm" 
+                                         alt="Confusion Matrix" 
+                                         style="max-height: 250px;">
+                                    <p class="small text-muted mt-2">Confusion Matrix</p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        // File upload handling
+        const uploadForm = document.getElementById('upload-form');
+        const uploadArea = document.getElementById('upload-area');
+        const fileInput = document.getElementById('file-input');
+        const browseButton = document.getElementById('browse-button');
+        const filePreview = document.getElementById('file-preview');
+        const imagePreview = document.getElementById('image-preview');
+        const videoPreviewContainer = document.getElementById('video-preview-container');
+        const videoPreview = document.getElementById('video-preview');
+        const fileName = document.getElementById('file-name');
+        const removeFileButton = document.getElementById('remove-file');
+        const analyzeButton = document.getElementById('analyze-button');
+        const thresholdSlider = document.getElementById('threshold-slider');
+        const thresholdValue = document.getElementById('threshold-value');
+        
+        // Threshold slider for file upload
+        thresholdSlider.addEventListener('input', function() {
+            thresholdValue.textContent = this.value;
+        });
+        
+        // Webcam threshold slider
+        const webcamThresholdSlider = document.getElementById('webcam-threshold-slider');
+        const webcamThresholdValue = document.getElementById('webcam-threshold-value');
+        
+        webcamThresholdSlider.addEventListener('input', function() {
+            webcamThresholdValue.textContent = this.value;
+        });
+        
+        // File upload event handlers
+        browseButton.addEventListener('click', function() {
+            fileInput.click();
+        });
+        
+        fileInput.addEventListener('change', function(e) {
+            handleFileSelect(e.target.files[0]);
+        });
+        
+        removeFileButton.addEventListener('click', function() {
+            resetFileUpload();
+        });
+        
+        uploadForm.addEventListener('submit', function(e) {
+            const processingModal = new bootstrap.Modal(document.getElementById('processingModal'));
+            processingModal.show();
+        });
+        
+        // Drag and drop functionality
+        ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, preventDefaults, false);
+        });
+        
+        function preventDefaults(e) {
+            e.preventDefault();
+            e.stopPropagation();
+        }
+        
+        ['dragenter', 'dragover'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, function() {
+                uploadArea.classList.add('dragover');
+            }, false);
+        });
+        
+        ['dragleave', 'drop'].forEach(eventName => {
+            uploadArea.addEventListener(eventName, function() {
+                uploadArea.classList.remove('dragover');
+            }, false);
+        });
+        
+        uploadArea.addEventListener('drop', function(e) {
+            const file = e.dataTransfer.files[0];
+            handleFileSelect(file);
+        }, false);
+        
+        function handleFileSelect(file) {
+            if (!file) return;
+            
+            // Check if file is an image or video
+            const fileType = file.type.split('/')[0];
+            
+            if (fileType !== 'image' && fileType !== 'video') {
+                alert('Please select an image or video file.');
+                return;
+            }
+            
+            // Update file name
+            fileName.textContent = file.name;
+            
+            // Create object URL
+            const objectUrl = URL.createObjectURL(file);
+            
+            // Show appropriate preview
+            if (fileType === 'image') {
+                imagePreview.src = objectUrl;
+                imagePreview.style.display = 'block';
+                videoPreviewContainer.style.display = 'none';
+            } else {
+                videoPreview.src = objectUrl;
+                videoPreviewContainer.style.display = 'block';
+                imagePreview.style.display = 'none';
+            }
+            
+            // Show the preview section and enable analyze button
+            filePreview.style.display = 'block';
+            analyzeButton.disabled = false;
+            
+            // Update file input
+            fileInput.files = e.dataTransfer ? e.dataTransfer.files : e.target.files;
+        }
+        
+        function resetFileUpload() {
+            fileInput.value = '';
+            filePreview.style.display = 'none';
+            analyzeButton.disabled = true;
+            
+            // Revoke object URLs to prevent memory leaks
+            if (imagePreview.src.startsWith('blob:')) {
+                URL.revokeObjectURL(imagePreview.src);
+            }
+            if (videoPreview.src.startsWith('blob:')) {
+                URL.revokeObjectURL(videoPreview.src);
+            }
+            
+            imagePreview.src = '';
+            videoPreview.src = '';
+        }
+        
+        // Webcam functionality
+        const video = document.getElementById('webcam');
+        const webcamOverlay = document.getElementById('webcam-overlay');
+        const startWebcamButton = document.getElementById('start-webcam');
+        const captureButton = document.getElementById('capture-image');
+        const canvas = document.getElementById('canvas');
+        const webcamResult = document.getElementById('webcam-result');
+        const webcamResultLabel = document.getElementById('webcam-result-label');
+        const webcamConfidence = document.getElementById('webcam-confidence');
+        
+        let stream = null;
+        let isWebcamActive = false;
+        
+        startWebcamButton.addEventListener('click', function() {
+            if (isWebcamActive) {
+                stopWebcam();
+            } else {
+                startWebcam();
+            }
+        });
+        
+        captureButton.addEventListener('click', function() {
+            captureImage();
+        });
+        
+        function startWebcam() {
+            navigator.mediaDevices.getUserMedia({ video: true })
+                .then(function(s) {
+                    stream = s;
+                    video.srcObject = stream;
+                    isWebcamActive = true;
+                    webcamOverlay.style.display = 'none';
+                    startWebcamButton.innerHTML = '<i class="fas fa-stop me-2"></i>Stop Webcam';
+                    startWebcamButton.classList.replace('btn-primary', 'btn-danger');
+                    captureButton.disabled = false;
+                    webcamResult.style.display = 'none';
+                })
+                .catch(function(err) {
+                    console.error('Error accessing webcam:', err);
+                    alert('Error accessing webcam: ' + err.message);
+                });
+        }
+        
+        function stopWebcam() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+                isWebcamActive = false;
+                webcamOverlay.style.display = 'flex';
+                startWebcamButton.innerHTML = '<i class="fas fa-play me-2"></i>Start Webcam';
+                startWebcamButton.classList.replace('btn-danger', 'btn-primary');
+                captureButton.disabled = true;
+            }
+        }
+        
+        function captureImage() {
+            if (!isWebcamActive) return;
+            
+            // Set canvas dimensions to match video
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            
+            // Draw the current video frame on the canvas
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+            
+            // Convert canvas to base64 image
+            const imageData = canvas.toDataURL('image/jpeg');
+            
+            // Show processing indicator
+            webcamResult.style.display = 'block';
+            webcamResult.className = 'alert alert-info text-center';
+            webcamResultLabel.textContent = 'Processing...';
+            webcamConfidence.textContent = '';
+            
+            // Send to server for detection
+            fetch('/webcam', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    image: imageData,
+                    threshold: webcamThresholdSlider.value
+                }),
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    webcamResult.className = 'alert alert-danger text-center';
+                    webcamResultLabel.textContent = 'Error';
+                    webcamConfidence.textContent = data.error;
+                    return;
+                }
+                
+                // Display result
+                if (data.is_deepfake) {
+                    webcamResult.className = 'alert alert-danger text-center';
+                } else {
+                    webcamResult.className = 'alert alert-success text-center';
+                }
+                
+                webcamResultLabel.textContent = data.label;
+                webcamConfidence.textContent = `Confidence: ${data.probability.toFixed(2)} (Threshold: ${data.threshold.toFixed(2)})`;
+            })
+            .catch(error => {
+                console.error('Error:', error);
+                webcamResult.className = 'alert alert-danger text-center';
+                webcamResultLabel.textContent = 'Error';
+                webcamConfidence.textContent = 'Failed to process image';
+            });
+        }
+        
+        // Clean up when switching tabs
+        const tabs = document.querySelectorAll('button[data-bs-toggle="tab"]');
+        tabs.forEach(tab => {
+            tab.addEventListener('shown.bs.tab', function(event) {
+                // If switching away from webcam tab, stop webcam
+                if (event.relatedTarget && event.relatedTarget.id === 'webcam-tab') {
+                    stopWebcam();
+                }
+            });
+        });
+    });
+</script>
+{% endblock %} 

@@ -1,0 +1,526 @@
+{% extends "base.html" %}
+
+{% block title %}Detection Results{% endblock %}
+
+{% block head %}
+<style>
+    .result-badge {
+        font-size: 1rem;
+        padding: 0.5rem 1rem;
+    }
+    .probability-meter {
+        height: 2rem;
+        background-color: #f8f9fa;
+        border-radius: 1rem;
+        overflow: hidden;
+        position: relative;
+    }
+    .probability-fill {
+        height: 100%;
+        transition: width 1s ease-in-out;
+    }
+    .probability-marker {
+        position: absolute;
+        top: 0;
+        width: 2px;
+        height: 100%;
+        background-color: #000;
+    }
+    .timeline-container {
+        position: relative;
+        height: 80px;
+        overflow: hidden;
+    }
+    .timeline {
+        height: 40px;
+        position: relative;
+        background-color: #f8f9fa;
+        border-radius: 4px;
+        margin-top: 20px;
+    }
+    .timeline-segment {
+        position: absolute;
+        height: 100%;
+        top: 0;
+    }
+    .timeline-segment-deepfake {
+        background-color: rgba(220, 53, 69, 0.7);
+    }
+    .timeline-segment-real {
+        background-color: rgba(25, 135, 84, 0.7);
+    }
+    .timeline-marker {
+        position: absolute;
+        height: 100%;
+        width: 2px;
+        background-color: #000;
+        top: 0;
+    }
+    .result-icon {
+        font-size: 3rem;
+    }
+    .animated-bar {
+        animation: growWidth 1.5s ease-out;
+    }
+    @keyframes growWidth {
+        from { width: 0; }
+        to { width: 100%; }
+    }
+    .animated-fade {
+        animation: fadeIn 1s ease-out;
+    }
+    @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+    }
+    .video-container {
+        position: relative;
+        width: 100%;
+        max-width: 640px;
+        margin: 0 auto;
+        border-radius: 8px;
+        overflow: hidden;
+        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    }
+    .video-player {
+        width: 100%;
+        border-radius: 8px;
+    }
+    .video-controls {
+        margin-top: 10px;
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-lg-8">
+        <!-- Result Header -->
+        <div class="card shadow-sm mb-4 animated-fade">
+            <div class="card-body p-4">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h1 class="card-title mb-0">
+                        {% if file_type == "video" %}
+                            <i class="fas fa-video me-2 text-primary"></i>
+                        {% else %}
+                            <i class="fas fa-image me-2 text-primary"></i>
+                        {% endif %}
+                        Video Analysis
+                    </h1>
+                    <div>
+                        <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                            <i class="fas fa-arrow-left me-2"></i>Back
+                        </a>
+                    </div>
+                </div>
+                
+                <div class="alert {% if result.is_deepfake %}alert-danger{% else %}alert-success{% endif %} d-flex align-items-center p-4">
+                    <div class="result-icon me-3 text-center">
+                        {% if result.is_deepfake %}
+                            <i class="fas fa-exclamation-triangle"></i>
+                        {% else %}
+                            <i class="fas fa-check-circle"></i>
+                        {% endif %}
+                    </div>
+                    <div>
+                        <h2 class="alert-heading">{{ result.label }}</h2>
+                        <p class="mb-0">
+                            {% if file_type == "video" %}
+                                {{ result.deepfake_percentage|round(1) }}% of analyzed frames were classified as manipulated
+                                ({{ result.deepfake_frames }} out of {{ result.sampled_frames }} frames)
+                                {% if not result.is_deepfake and result.deepfake_percentage > 50 %}
+                                <br><small><i class="fas fa-info-circle me-1"></i>Video classified as authentic because {{ result.real_frames }} authentic frames were detected (minimum 15 required)</small>
+                                {% endif %}
+                            {% else %}
+                                Manipulation probability: {{ result.probability|round(2) }}
+                                (Threshold: {{ result.threshold }})
+                            {% endif %}
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Media Display -->
+        <div class="card shadow-sm mb-4 animated-fade">
+            <div class="card-body">
+                <h5 class="card-title mb-3">
+                    Analyzed Media
+                    <small class="text-muted">({{ filename }})</small>
+                </h5>
+                
+                <div class="text-center">
+                    {% if file_type == "video" %}
+                        {% if result.file_path %}
+                            <div class="video-container mb-3">
+                                <video id="video-player" class="video-player" controls autoplay muted loop>
+                                    <source src="{{ url_for('static', filename='uploads/' + result.file_path) }}" type="video/mp4">
+                                    Your browser does not support the video tag.
+                                </video>
+                            </div>
+                            <div class="video-controls">
+                                <button id="play-pause-btn" class="btn btn-primary">
+                                    <i class="fas fa-pause me-2"></i><span>Pause</span>
+                                </button>
+                                <button id="mute-btn" class="btn btn-outline-secondary">
+                                    <i class="fas fa-volume-mute me-2"></i><span>Unmute</span>
+                                </button>
+                                <button id="restart-btn" class="btn btn-outline-secondary">
+                                    <i class="fas fa-redo me-2"></i>Restart
+                                </button>
+                                <a href="{{ url_for('static', filename='uploads/' + result.file_path) }}" 
+                                   class="btn btn-outline-primary" download>
+                                    <i class="fas fa-download me-2"></i>Download
+                                </a>
+                            </div>
+                        {% elif result.thumbnail %}
+                            <img src="{{ url_for('static', filename='uploads/' + result.thumbnail) }}" 
+                                 class="img-fluid rounded-3 mb-2" alt="Video thumbnail">
+                            <div class="mt-2">
+                                <a href="{{ url_for('static', filename='uploads/' + result.file_path) }}" 
+                                   class="btn btn-primary" target="_blank">
+                                    <i class="fas fa-play me-2"></i>Play Video
+                                </a>
+                            </div>
+                        {% endif %}
+                    {% else %}
+                        <img src="{{ url_for('static', filename='uploads/' + result.file_path) }}" 
+                             class="img-fluid rounded-3" alt="Analyzed image">
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+        
+        <!-- Detailed Analysis -->
+        <div class="card shadow-sm mb-4 animated-fade">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-chart-line me-2"></i>Detailed Analysis
+            </div>
+            <div class="card-body">
+                {% if file_type == "video" %}
+                    <!-- Video Analysis -->
+                    <div class="mb-4">
+                        <h5 class="card-title">Timeline Analysis</h5>
+                        <p class="text-muted mb-2">Visualization of deepfake detection across video frames</p>
+                        
+                        <div class="timeline-container mb-3">
+                            <div class="timeline">
+                                {% for segment in result.frame_results %}
+                                    {% set position = (segment.frame_number / result.total_frames * 100)|round(2) %}
+                                    <div class="timeline-segment 
+                                              {% if segment.is_deepfake %}timeline-segment-deepfake{% else %}timeline-segment-real{% endif %}"
+                                         style="left: {{ position }}%; width: 3px;"
+                                         title="Frame {{ segment.frame_number }} ({{ segment.timestamp|round(1) }}s): 
+                                                {{ 'Deepfake' if segment.is_deepfake else 'Authentic' }} 
+                                                ({{ segment.probability|round(2) }})"
+                                         data-time="{{ segment.timestamp }}">
+                                    </div>
+                                {% endfor %}
+                                <div class="timeline-marker" style="left: {{ (result.threshold * 100)|round }}%;"></div>
+                            </div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between small text-muted">
+                            <div>Start (0:00)</div>
+                            {% set minutes = (result.duration / 60)|int %}
+                            {% set seconds = (result.duration % 60)|int %}
+                            <div>End ({{ minutes }}:{% if seconds < 10 %}0{% endif %}{{ seconds }})</div>
+                        </div>
+                    </div>
+                    
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-subtitle mb-2 text-muted">Frame Analysis</h6>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Total Frames:</span>
+                                        <span class="fw-bold">{{ result.total_frames }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Analyzed Frames:</span>
+                                        <span class="fw-bold">{{ result.sampled_frames }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Deepfake Frames:</span>
+                                        <span class="fw-bold text-danger">{{ result.deepfake_frames }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span>Authentic Frames:</span>
+                                        <span class="fw-bold text-success">{{ result.real_frames }}</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card h-100">
+                                <div class="card-body">
+                                    <h6 class="card-subtitle mb-2 text-muted">Detection Distribution</h6>
+                                    <canvas id="frameDistributionChart" height="150"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% else %}
+                    <!-- Image Analysis -->
+                    <div class="mb-4">
+                        <h5 class="card-title">Manipulation Probability</h5>
+                        <p class="text-muted">Visual representation of manipulation likelihood</p>
+                        
+                        <div class="probability-meter mb-2">
+                            <div class="probability-fill bg-danger animated-bar" style="width: {{ result.probability * 100 }}%;"></div>
+                            <div class="probability-marker" style="left: {{ result.threshold * 100 }}%;"></div>
+                        </div>
+                        
+                        <div class="d-flex justify-content-between">
+                            <span class="small text-muted">0% (Authentic)</span>
+                            <span class="small text-muted">100% (Manipulated)</span>
+                        </div>
+                    </div>
+                    
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-subtitle mb-2 text-muted">Confidence Analysis</h6>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Manipulation Probability:</span>
+                                        <span class="fw-bold">{{ result.probability|round(4) }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between mb-2">
+                                        <span>Detection Threshold:</span>
+                                        <span class="fw-bold">{{ result.threshold }}</span>
+                                    </div>
+                                    <div class="d-flex justify-content-between">
+                                        <span>Classification Margin:</span>
+                                        <span class="fw-bold {% if result.is_deepfake %}text-danger{% else %}text-success{% endif %}">
+                                            {{ ((result.probability - result.threshold) * 100)|abs|round(2) }}%
+                                        </span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="card mb-3">
+                                <div class="card-body">
+                                    <h6 class="card-subtitle mb-2 text-muted">Confidence Gauge</h6>
+                                    <canvas id="confidenceGauge" height="150"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+    
+    <div class="col-lg-4">
+        <!-- Interpretation Card -->
+        <div class="card shadow-sm mb-4 animated-fade">
+            <div class="card-header bg-primary text-white">
+                <i class="fas fa-info-circle me-2"></i>Result Interpretation
+            </div>
+            <div class="card-body">
+                <p>
+                    {% if result.is_deepfake %}
+                        Our model has detected characteristics consistent with manipulated content. This indicates the media may have been algorithmically altered.
+                    {% else %}
+                        Our model did not detect significant signs of manipulation. The content appears to be authentic based on our analysis.
+                    {% endif %}
+                </p>
+                
+                <h6 class="mt-3">Understanding the Results</h6>
+                <ul class="mb-3">
+                    <li>
+                        <strong>Threshold:</strong> The decision boundary ({{ result.threshold }}) that classifies content as real or fake.
+                    </li>
+                    <li>
+                        <strong>Confidence:</strong> How certain the model is in its prediction.
+                    </li>
+                    {% if file_type == "video" %}
+                    <li>
+                        <strong>Frame Analysis:</strong> Percentage of frames classified as manipulated.
+                    </li>
+                    <li>
+                        <strong>Authenticity Rule:</strong> A video is classified as authentic if either:
+                        <ul>
+                            <li>Less than 50% of frames are classified as manipulated, OR</li>
+                            <li>At least 15 frames are classified as authentic ({{ result.real_frames }} authentic frames detected)</li>
+                        </ul>
+                    </li>
+                    {% endif %}
+                </ul>
+                
+                <h6 class="mt-3">Important Considerations</h6>
+                <div class="alert alert-warning">
+                    <i class="fas fa-exclamation-triangle me-2"></i>
+                    <small>
+                        This is an AI-based detection system and may not be 100% accurate. Results should be interpreted with caution and verified through multiple methods.
+                    </small>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Additional Actions -->
+        <div class="card shadow-sm mb-4 animated-fade">
+            <div class="card-body">
+                <h5 class="card-title">Additional Actions</h5>
+                <div class="d-grid gap-2">
+                    <a href="{{ url_for('index') }}" class="btn btn-outline-primary">
+                        <i class="fas fa-home me-2"></i>Return Home
+                    </a>
+                    <a href="#" class="btn btn-outline-secondary" onclick="window.print()">
+                        <i class="fas fa-print me-2"></i>Print Results
+                    </a>
+                    {% if not from_history %}
+                    <a href="{{ url_for('detect') }}" class="btn btn-primary">
+                        <i class="fas fa-upload me-2"></i>Analyze Another File
+                    </a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        {% if file_type == "video" %}
+        // Video player controls
+        const videoPlayer = document.getElementById('video-player');
+        const playPauseBtn = document.getElementById('play-pause-btn');
+        const muteBtn = document.getElementById('mute-btn');
+        const restartBtn = document.getElementById('restart-btn');
+        
+        if (videoPlayer) {
+            // Play/Pause button functionality
+            playPauseBtn.addEventListener('click', function() {
+                if (videoPlayer.paused) {
+                    videoPlayer.play();
+                    playPauseBtn.innerHTML = '<i class="fas fa-pause me-2"></i><span>Pause</span>';
+                } else {
+                    videoPlayer.pause();
+                    playPauseBtn.innerHTML = '<i class="fas fa-play me-2"></i><span>Play</span>';
+                }
+            });
+            
+            // Mute button functionality
+            muteBtn.addEventListener('click', function() {
+                videoPlayer.muted = !videoPlayer.muted;
+                if (videoPlayer.muted) {
+                    muteBtn.innerHTML = '<i class="fas fa-volume-mute me-2"></i><span>Unmute</span>';
+                } else {
+                    muteBtn.innerHTML = '<i class="fas fa-volume-up me-2"></i><span>Mute</span>';
+                }
+            });
+            
+            // Restart button functionality
+            restartBtn.addEventListener('click', function() {
+                videoPlayer.currentTime = 0;
+                videoPlayer.play();
+                playPauseBtn.innerHTML = '<i class="fas fa-pause me-2"></i><span>Pause</span>';
+            });
+            
+            // Timeline segment click to seek
+            const timelineSegments = document.querySelectorAll('.timeline-segment');
+            timelineSegments.forEach(segment => {
+                segment.addEventListener('click', function() {
+                    const timeToSeek = parseFloat(this.getAttribute('data-time') || 0);
+                    if (videoPlayer && !isNaN(timeToSeek)) {
+                        videoPlayer.currentTime = timeToSeek;
+                        videoPlayer.play();
+                        playPauseBtn.innerHTML = '<i class="fas fa-pause me-2"></i><span>Pause</span>';
+                    }
+                });
+            });
+            
+            // Video player status update
+            videoPlayer.addEventListener('play', function() {
+                playPauseBtn.innerHTML = '<i class="fas fa-pause me-2"></i><span>Pause</span>';
+            });
+            
+            videoPlayer.addEventListener('pause', function() {
+                playPauseBtn.innerHTML = '<i class="fas fa-play me-2"></i><span>Play</span>';
+            });
+            
+            videoPlayer.addEventListener('ended', function() {
+                playPauseBtn.innerHTML = '<i class="fas fa-play me-2"></i><span>Play</span>';
+            });
+        }
+        
+        // Create frame distribution chart
+        const ctx = document.getElementById('frameDistributionChart').getContext('2d');
+        const frameDistributionChart = new Chart(ctx, {
+            type: 'pie',
+            data: {
+                labels: ['Deepfake Frames', 'Authentic Frames'],
+                datasets: [{
+                    data: [{{ result.deepfake_frames }}, {{ result.real_frames }}],
+                    backgroundColor: [
+                        'rgba(220, 53, 69, 0.7)',
+                        'rgba(25, 135, 84, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(220, 53, 69, 1)',
+                        'rgba(25, 135, 84, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    }
+                }
+            }
+        });
+        {% else %}
+        // Create confidence gauge
+        const gaugeCtx = document.getElementById('confidenceGauge').getContext('2d');
+        const confidenceGauge = new Chart(gaugeCtx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Manipulated', 'Authentic'],
+                datasets: [{
+                    data: [{{ result.probability }}, {{ 1 - result.probability }}],
+                    backgroundColor: [
+                        'rgba(220, 53, 69, 0.7)',
+                        'rgba(25, 135, 84, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(220, 53, 69, 1)',
+                        'rgba(25, 135, 84, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                cutout: '70%',
+                responsive: true,
+                circumference: 180,
+                rotation: 270,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
+                    },
+                    tooltip: {
+                        callbacks: {
+                            label: function(context) {
+                                return context.label + ': ' + (context.raw * 100).toFixed(2) + '%';
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        {% endif %}
+    });
+</script>
+{% endblock %} 
